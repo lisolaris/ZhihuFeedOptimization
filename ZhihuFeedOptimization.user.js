@@ -82,12 +82,19 @@
             // const cards = document.getElementsByClassName("Card TopstoryItem TopstoryItem-isRecommend");
 
             for (let card of cardsToBeDeleted){
-                let cardItem = card.querySelector("div.ContentItem.AnswerItem");
-                if (!cardItem) { cardItem = card.querySelector("div.ContentItem.ArticleItem"); }
+                // 每个内容卡片都具有class: "ContentItem ArticleItem"或"ContentItem AnswerItem"
+                let cardItem = card.querySelector("div.ContentItem");
+                // if (!cardItem) { cardItem = card.querySelector("div.ContentItem.ArticleItem"); }
 
-                let text = card.querySelector("span.RichText.ztext.CopyrightRichText-richText").textContent
-                let url = cardItem.querySelectorAll("meta[itemprop='url']")[1].getAttribute("content"); 
-                console.log(`知乎默认头像卡片移除 已移除卡片: ${cardItem.getAttribute("data-zop")}, 原链接: ${url}, 预览: ${text}`);
+                let text = card.querySelector("span.RichText.ztext.CopyrightRichText-richText").textContent;
+                const urls = [];
+                if (card.querySelectorAll("meta[itemprop='url']").length != 0){
+                    for (let url of card.querySelectorAll("meta[itemprop='url']")){
+                        urls.push(url.getAttribute("content"));
+                    }
+                }
+
+                console.log(`知乎默认头像卡片移除 已移除卡片: ${cardItem.getAttribute("data-zop")}, 原链接: ${JSON.stringify(urls)}, 预览: ${text}`);
                 card.remove();
             }
 
