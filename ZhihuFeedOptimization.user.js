@@ -7,11 +7,13 @@
 // @grant       GM_getValue
 // @grant       GM_registerMenuCommand
 // @grant       GM_unregisterMenuCommand
-// @version     0.2.3
+// @version     0.2.4
 // @run-at      document-idle
 // @author      lisolaris
 // @icon        https://www.google.com/s2/favicons?sz=64&domain=zhihu.com
 // @description 优化知乎首页推荐流的内容，如移除灌水用户、按屏蔽词屏蔽等
+// @downloadURL https://update.greasyfork.org/scripts/498139/%E7%9F%A5%E4%B9%8E%E6%8E%A8%E8%8D%90%E6%B5%81%E4%BC%98%E5%8C%96.user.js
+// @updateURL https://update.greasyfork.org/scripts/498139/%E7%9F%A5%E4%B9%8E%E6%8E%A8%E8%8D%90%E6%B5%81%E4%BC%98%E5%8C%96.user.js
 // ==/UserScript==
 
 (function () {
@@ -32,7 +34,7 @@
 
     var newCardsThreshold = parseInt(GM_getValue("threshold", "5"));
 
-    function checkIfBannedWordInCard(newCards=null){
+    function checkIfBannedWordInCard(newCards){
         for (let card of newCards){
             // console.log("checkIfBannedWordInCard(): " + card.textContent)
             // // 删除知乎自带的设置屏蔽词按钮（会员可用） 加入一个新的
@@ -63,17 +65,12 @@
         }
     }
 
-    async function checkIfAuthorDefaultAvatarInCard(newCards=null){
-        var cards;
-        if (!newCards) cards = document.getElementsByClassName("Card TopstoryItem TopstoryItem-isRecommend");
-        else cards = newCards;
-
+    async function checkIfAuthorDefaultAvatarInCard(newCards){
         const fetchPromises = [];
-        for (let card of cards) {
+        for (let card of newCards) {
             // 每个内容卡片都具有class: "ContentItem ArticleItem"或"ContentItem AnswerItem"
-            let cardItem = card.querySelector("div.ContentItem");
             // console.log("card: " + card.textContent)
-
+            let cardItem = card.querySelector("div.ContentItem");
             let extraInfo = JSON.parse(cardItem.getAttribute("data-za-extra-module"));
             let userId = extraInfo.card.content.author_member_hash_id;
 
@@ -147,9 +144,11 @@
 
     async function checkCards(newCards=null){
         console.log("知乎推荐流优化 检查新获得的推荐卡片列表……");
-
-        checkIfBannedWordInCard(newCards);
-        checkIfAuthorDefaultAvatarInCard(newCards);
+        var cards;
+        if (!newCards) cards = Array.from(document.getElementsByClassName("Card TopstoryItem TopstoryItem-isRecommend"));
+        else cards = newCards;
+        checkIfBannedWordInCard(cards);
+        checkIfAuthorDefaultAvatarInCard(cards);
     }
 
     // 当检查到推荐流列表发生更新时的回调函数
@@ -238,10 +237,10 @@
         const observer = new MutationObserver(isNodeAddedCallback);
         observer.observe(recomBody, obconfig);
 
-        // console.log("知乎推荐流优化 开始初次检查");
-        // sleep(1500);
-        // findDefaultAvatarCard();
-
+        console.log("知乎推荐流优化 开始初次检查");
+        // 不知道为什么卡片中data-za-extra-module这个属性会在整个页面的DOM树加载完成后才被添加进去 等待一下再进行初次检查
+        if (document.querySelector("div.ContentItem").getAttribute("data-za-extra-module"))
+            checkCards(recomBody.querySelectorAll("div.Card.TopstoryItem.TopstoryItem-isRecommend"));
     }
     // setInterval(showArrayContent, 5000);
 })();
