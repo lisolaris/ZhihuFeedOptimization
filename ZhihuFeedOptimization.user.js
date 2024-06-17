@@ -30,7 +30,7 @@
         for (let word of JSON.parse(bannedWordsJson)) 
             bannedWords.add(word);
 
-    var newCardsThreshold = GM_getValue("threshold", 5);
+    var newCardsThreshold = parseInt(GM_getValue("threshold", "5"));
 
     function checkIfBannedWordInCard(newCards=null){
         for (let card of newCards){
@@ -172,7 +172,7 @@
 
     function setNewCardsCountThreshold(){
         let threshold = prompt("请输入数值:", newCardsThreshold);
-        if (isNaN(parseInt(threshold))){
+        if (!isNaN(parseInt(threshold))){
             GM_setValue("threshold", parseInt(threshold));
         }
     }
@@ -228,7 +228,8 @@
 
     console.log("知乎推荐流优化 已完成加载");
     console.log("知乎推荐流优化 用户屏蔽词库: " + JSON.stringify(Array.from(bannedWords)));
-    
+    console.log("知乎推荐流优化 新卡片数量阈值: " + newCardsThreshold)
+
     const recomBody = document.querySelector("div.Topstory-recommend");
 
     if (recomBody) {
