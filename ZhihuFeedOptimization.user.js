@@ -7,7 +7,7 @@
 // @grant       GM_getValue
 // @grant       GM_registerMenuCommand
 // @grant       GM_unregisterMenuCommand
-// @version     0.2.1
+// @version     0.2.3
 // @run-at      document-idle
 // @author      lisolaris
 // @icon        https://www.google.com/s2/favicons?sz=64&domain=zhihu.com
@@ -30,9 +30,7 @@
         for (let word of JSON.parse(bannedWordsJson)) 
             bannedWords.add(word);
 
-    // function addBannedWords(card){
-    //     alert(card.querySelector("h2").textContent);
-    // }
+    var newCardsThreshold = GM_getValue("threshold", 5);
 
     function checkIfBannedWordInCard(newCards=null){
         for (let card of newCards){
@@ -166,14 +164,14 @@
             }
         }
 
-        if (newAddedCards.size >= 5){
+        if (newAddedCards.size >= newCardsThreshold){
             checkCards(Array.from(newAddedCards));
             newAddedCards.clear();
         }
     }
 
     function setNewCardsCountThreshold(){
-        let threshold = prompt("请输入数值:", "5");
+        let threshold = prompt("请输入数值:", newCardsThreshold);
         if (isNaN(parseInt(threshold))){
             GM_setValue("threshold", parseInt(threshold));
         }
