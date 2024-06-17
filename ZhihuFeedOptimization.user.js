@@ -98,7 +98,9 @@
                 }
 
                 console.log(`%c知乎默认头像卡片移除 已移除卡片: ${cardItem.getAttribute("data-zop")}, 原链接: ${JSON.stringify(urls)}, 预览: ${text}`, "color:#00A2E8");
-                card.remove();
+                // 不可使用card.remove() 会导致点击首页顶部推荐按钮刷新页面时出错（removeChild()失败）
+                card.setAttribute("hidden", "")
+
             }
 
             cardsToBeDeleted.clear();
