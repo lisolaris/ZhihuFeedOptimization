@@ -1,6 +1,7 @@
 // ==UserScript==
 // @name        知乎推荐流优化
 // @namespace   ZhihuFeedOptimization
+// @license     GPLv3
 // @match       https://www.zhihu.com/
 // @grant       GM_setValue
 // @grant       GM_getValue
@@ -195,7 +196,7 @@
         let words = prompt("请输入屏蔽词，输入多个时以','分隔: ");
         console.log("知乎推荐流优化 用户输入: " + words);
         if (words){
-            words = words.replace(/\s*/g,"").replace("，", ",");
+            words = words.replaceAll(/\s*/g,"").replaceAll("，", ",");
 
             let wordlist = words.split(",");
             for (let w of wordlist) bannedWords.add(w);
@@ -210,7 +211,7 @@
         let words = prompt("请输入要移除的屏蔽词，输入多个时以','分隔: ");
         console.log("知乎推荐流优化 用户输入: " + words);
         if (words){
-            words = words.replace(/\s*/g,"").replace("，", ",");
+            words = words.replaceAll(/\s*/g,"").replaceAll("，", ",");
 
             let wordlist = words.split(",");
             for (let w of wordlist) bannedWords.delete(w);

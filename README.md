@@ -20,3 +20,5 @@
 未来预计还会添加更多功能，等待更新……  
 
 脚本在Firefox 127.0, ViolentMonkey 2.19.0上测试可用。  
+
+也请参见：<https://github.com/lisolaris/ZhihuFeedOptimization>  
