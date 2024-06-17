@@ -56,7 +56,7 @@
                     let cardItem = card.querySelector("div.ContentItem");
                     let extraInfo = JSON.parse(cardItem.getAttribute("data-za-extra-module"));
                     let userId = extraInfo.card.content.author_member_hash_id;
-                    console.log(`待删除列表中加入: ${userId}, 原因: 用户屏蔽词`);
+                    console.log(`%c待删除列表中加入: ${userId}, 原因: 用户屏蔽词 ${word}`, "color:#00A2E8);
                     cardsToBeDeleted.add(card);
                     break;
                 }
@@ -95,7 +95,7 @@
                                 else {
                                     // console.log("用户 " + userId + " 头像URL " + data.avatar_url_template);
                                     if (data.avatar_url_template.toLowerCase().includes(DEFAULTAVATARHASH)){
-                                        console.log(`待删除列表中加入: ${userId}, 原因: 默认头像`);
+                                        console.log(`%c待删除列表中加入: ${userId}, 原因: 默认头像`, "color:#00A2E8);
                                         cardsToBeDeleted.add(card);
                                     } 
                                     else{
