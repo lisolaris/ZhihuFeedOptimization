@@ -242,7 +242,7 @@
 
     function toggleUsernameAuxJudgment(){
         usernameAuxJudgment = !usernameAuxJudgment;
-        GM_setValue("usernameAuxJudgment", usernameAuxJudgment);
+        GM_setValue("usernameAuxJudgment", (usernameAuxJudgment ? 1 : 0));
         updateVariableMenuInOrder();
     }
 
@@ -266,7 +266,7 @@
     console.log("知乎推荐流优化 用户屏蔽词库: " + JSON.stringify(Array.from(bannedWords)));
     console.log("知乎推荐流优化 答案数量阈值: " + answerCountThreshold);
     console.log("知乎推荐流优化 新卡片数量阈值: " + newCardsThreshold);
-    console.log("知乎推荐流优化 是否使用用户名作为辅助判断: " + usernameAuxJudgment);
+    console.log("知乎推荐流优化 是否使用用户名作为辅助判断: " + (usernameAuxJudgment ? "是" : "否"));
 
     const recomBody = document.querySelector("div.Topstory-recommend");
 
