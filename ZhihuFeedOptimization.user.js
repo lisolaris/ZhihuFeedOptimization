@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name        删除知乎首页推送中使用默认头像用户的回答
+// @name        知乎推荐流优化
 // @namespace   ZhihuFeedOptimization
 // @match       https://www.zhihu.com/
 // @grant       GM_setValue
@@ -10,7 +10,7 @@
 // @run-at      document-idle
 // @author      lisolaris
 // @icon        https://www.google.com/s2/favicons?sz=64&domain=zhihu.com
-// @description 删掉那些头像都不换就来知乎灌水的用户生产的内容，眼不见心不烦
+// @description 优化知乎首页推荐流的内容，如移除灌水用户、按屏蔽词屏蔽等
 // ==/UserScript==
 
 (function () {
@@ -56,7 +56,7 @@
                     let cardItem = card.querySelector("div.ContentItem");
                     let extraInfo = JSON.parse(cardItem.getAttribute("data-za-extra-module"));
                     let userId = extraInfo.card.content.author_member_hash_id;
-                    console.log(`%c待删除列表中加入: ${userId}, 原因: 用户屏蔽词 ${word}`, "color:#00A2E8");
+                    console.log(`%c知乎推荐流优化 待删除列表中加入: ${userId}, 原因: 用户屏蔽词 ${word}`, "color:#00A2E8");
                     cardsToBeDeleted.add(card);
                     break;
                 }
@@ -95,7 +95,7 @@
                                 else {
                                     // console.log("用户 " + userId + " 头像URL " + data.avatar_url_template);
                                     if (data.avatar_url_template.toLowerCase().includes(DEFAULTAVATARHASH)){
-                                        console.log(`%c待删除列表中加入: ${userId}, 原因: 默认头像`, "color:#00A2E8");
+                                        console.log(`%c知乎推荐流优化 待删除列表中加入: ${userId}, 原因: 默认头像`, "color:#00A2E8");
                                         cardsToBeDeleted.add(card);
                                     } 
                                     else{
@@ -133,7 +133,7 @@
                         urls.push(url.getAttribute("content"));
                     }
                 }
-                console.log(`%c知乎推荐流优化 已移除卡片: ${cardItem.getAttribute("data-zop")}, 原链接: ${JSON.stringify(urls)}, 预览: ${text}`, "color:#00A2E8");
+                console.log(`%c知乎推荐流优化 已移除卡片: ${cardItem.getAttribute("data-zop")}, 原链接: ${JSON.stringify(urls)}, 预览: ${text}`, "color:#FF00FF");
                 // 不可使用card.remove() 会导致点击首页顶部推荐按钮刷新页面时出错（removeChild()失败）
                 card.setAttribute("hidden", "")
             }
@@ -187,7 +187,8 @@
         bannedWordsJson = "";
         bannedWords.clear();
         GM_setValue("bannedWords", bannedWordsJson);
-        alert("知乎推荐流优化 已清空屏蔽词列表")
+        alert("知乎推荐流优化 已清空屏蔽词列表");
+        console.log(Array.from(bannedWords));
     }
 
     function addBannedWords(){
