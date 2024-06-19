@@ -7,7 +7,7 @@
 // @grant       GM_getValue
 // @grant       GM_registerMenuCommand
 // @grant       GM_unregisterMenuCommand
-// @version     0.2.6
+// @version     0.2.7
 // @run-at      document-idle
 // @author      lisolaris
 // @icon        https://www.google.com/s2/favicons?sz=64&domain=zhihu.com
@@ -34,28 +34,12 @@
             bannedWords.add(word);
 
     var newCardsThreshold = parseInt(GM_getValue("newCardsThreshold", "5"));
-    var answerCountThreshold = parseInt(GM_getValue("answerCountThreshold", "200"));
+    var answerCountThreshold = parseInt(GM_getValue("answerCountThreshold", "100"));
     var usernameAuxJudgment = parseInt(GM_getValue("usernameAuxJudgment", "1"));
     var autoSendUninterestWithBannedWordCard = parseInt(GM_getValue("autoSendUninterestWithBannedWordCard", "1"));
 
     function checkIfBannedWordInCard(newCards){
         for (let card of newCards){
-            // TODO: 将屏蔽词选项加入到卡片底部按钮三点式菜单（更多）里
-            // console.log("checkIfBannedWordInCard(): " + card.textContent)
-            // // 删除知乎自带的设置屏蔽词按钮（会员可用） 加入一个新的
-            // let button = card.querySelector("button.Button.OptionsButton[aria-label='更多']");
-            // button.addEventListener("click", (function(){
-            //     let popWind = document.querySelector("div.Popover-content.Popover-content--bottom.Popover-content--arrowed.Popover-content-enter-done");
-            //     popWind.querySelector("button.TopstoryItem-menuItem").remove();
-
-            //     var addBlockButtonElem = document.createElement("button");
-            //     addBlockButtonElem.className = "Button Menu-item AnswerItem-selfMenuItem Button--plain";
-            //     addBlockButtonElem.type = "button";
-            //     addBlockButtonElem.addEventListener("click", alert("???"));
-
-            //     popWind.querySelector("div.Menu").appendChild(addBlockButtonElem);
-            //     }));
-
             // 检查标题是否含有用户屏蔽词
             for (let word of bannedWords){
                 if (card.querySelector("h2").textContent.includes(word)){
@@ -75,7 +59,6 @@
         for (let card of newCards) {
             // 每个内容卡片都具有class: "ContentItem ArticleItem"或"ContentItem AnswerItem"
             // 或是被推送到首页的专栏链接 也会有ContentItem属性
-            // console.log("card: " + card.textContent)
             let cardItem = card.querySelector("div.ContentItem");
             let cardType = cardItem.className.includes("AnswerItem") ? "answer" : "article";
             let extraInfo = JSON.parse(cardItem.getAttribute("data-za-extra-module"));
@@ -153,10 +136,30 @@
                             urls.push(url.getAttribute("content"));
                         }
                     }
-                    console.log(`%c知乎推荐流优化 已移除卡片: ${cardItem.getAttribute("data-zop")}, 原链接: ${JSON.stringify(urls)}, 预览: ${text}`, "color:#FF00FF");
+                    // 对来自屏蔽词的卡片点击不感兴趣
                     if (cardSet === cardsToBeDeletedWithBannedWord && autoSendUninterestWithBannedWordCard){
-
+                        const floatLayerMenuObConfig = {attributes: false, childList: true, subtree: false};
+                        const floatLayerMenuObserver = new MutationObserver(function(mutationRecords, observer){
+                            for (let mutation of mutationRecords){
+                                if (mutation.addedNodes.length != 0){
+                                    let popWind = mutation.addedNodes[0].querySelector("div.Popover-content");
+                                    if (popWind){
+                                        for (let button of popWind.querySelectorAll("button.AnswerItem-selfMenuItem")){
+                                            if (button.innerText === "不感兴趣"){
+                                                button.click();
+                                                isNotInterested = true;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            observer.disconnect();
+                        });
+                        floatLayerMenuObserver.observe(document.body, floatLayerMenuObConfig);
+                        // 在开始监视后再点击按钮
+                        card.querySelector("button.Button.OptionsButton").click();
                     }
+                    console.log(`%c知乎推荐流优化 已移除卡片: ${cardItem.getAttribute("data-zop")}, 原链接: ${JSON.stringify(urls)}, 预览: ${text}, 已不感兴趣: ${autoSendUninterestWithBannedWordCard ? "是" : "否"}`, "color:#FF00FF");
                     // 不可使用card.remove() 会导致点击首页顶部推荐按钮刷新页面时出错（removeChild()失败）
                     card.setAttribute("hidden", "")
                 }
@@ -225,6 +228,7 @@
         var setNewCardsCountThresholdMenuId = null;
         var setAnswerCountThresholdMenuId = null;
         var toggleUsernameAuxJudgmentMenuId = null;
+        var toggleAutoSendUninterestMenuId = null;
 
         function menuAddBannedWords(){
             let words = prompt("请输入屏蔽词，输入多个时以','分隔: ");
@@ -243,34 +247,29 @@
         }
 
         function menuRemoveBannedWords(){
-            let words = prompt("请输入要移除的屏蔽词，输入多个时以','分隔: ");
+            let words = prompt("知乎推荐流优化 请输入要移除的屏蔽词，输入多个时以','分隔: \n可通过输入“清空全部屏蔽词！”来清空已设置的屏蔽词库 ");
             // console.log("知乎推荐流优化 用户输入: " + words);
             if (words){
-                words = words.replaceAll(/\s*/g,"").replaceAll("，", ",");
+                if (words === "清空全部屏蔽词！"){
+                    let decision = confirm("知乎推荐流优化 确定要清空屏蔽词列表吗？");
+                    if (decision){
+                        bannedWordsJson = "[]";
+                        bannedWords.clear();
+                        GM_setValue("bannedWords", bannedWordsJson);
+                        alert("知乎推荐流优化 已清空屏蔽词列表");
+                        console.log("知乎推荐流优化 用户屏蔽词库: " + bannedWordsJson);
+                    }
+                }
+                else{
+                    words = words.replaceAll(/\s*/g,"").replaceAll("，", ",");
+                    let wordlist = words.split(",");
+                    for (let w of wordlist) bannedWords.delete(w);
 
-                let wordlist = words.split(",");
-                for (let w of wordlist) bannedWords.delete(w);
-
-                bannedWordsJson = JSON.stringify(Array.from(bannedWords));
-                console.log("知乎推荐流优化 用户屏蔽词库: " + bannedWordsJson);
-                GM_setValue("bannedWords", bannedWordsJson);
-                alert(`知乎推荐流优化 已删除屏蔽词: ${JSON.stringify(wordlist)} \n当前屏蔽词库: ${bannedWordsJson}`);
-            }
-        }
-
-        function menuShowBannedWords(){
-            bannedWordsJson = GM_getValue("bannedWords");
-            alert(`知乎推荐流优化 屏蔽词列表: \n${bannedWordsJson}`);
-        }
-
-        function menuPurgeBannedWords(){
-            let decision = confirm("知乎推荐流优化 确定要清空屏蔽词列表吗？");
-            if (decision){
-                bannedWordsJson = "";
-                bannedWords.clear();
-                GM_setValue("bannedWords", bannedWordsJson);
-                alert("知乎推荐流优化 已清空屏蔽词列表");
-                console.log("知乎推荐流优化 用户屏蔽词库: " + bannedWordsJson);
+                    bannedWordsJson = JSON.stringify(Array.from(bannedWords));
+                    console.log("知乎推荐流优化 用户屏蔽词库: " + bannedWordsJson);
+                    GM_setValue("bannedWords", bannedWordsJson);
+                    alert(`知乎推荐流优化 已删除屏蔽词: ${JSON.stringify(wordlist)} \n当前屏蔽词库: ${bannedWordsJson}`);
+                }
             }
         }
 
@@ -303,22 +302,24 @@
             GM_unregisterMenuCommand(setAnswerCountThresholdMenuId);
             GM_unregisterMenuCommand(setNewCardsCountThresholdMenuId);
             GM_unregisterMenuCommand(toggleUsernameAuxJudgmentMenuId);
+            GM_unregisterMenuCommand(toggleAutoSendUninterestMenuId);
+
             setAnswerCountThresholdMenuId = GM_registerMenuCommand(`设置答案数量阈值（${answerCountThreshold}）`, menuSetAnswerCountThreshold);
             setNewCardsCountThresholdMenuId = GM_registerMenuCommand(`设置新卡片数量阈值（${newCardsThreshold}）`, menuSetNewCardsCountThreshold);
             toggleUsernameAuxJudgmentMenuId = GM_registerMenuCommand(`切换用户名辅助判定（${usernameAuxJudgment ? "是" : "否"}）`, menuToggleUsernameAuxJudgment, {autoClose: false});
+            toggleAutoSendUninterestMenuId = GM_registerMenuCommand(`切换自动点击不感兴趣（${autoSendUninterestWithBannedWordCard ? "是" : "否"}）`, menuToggleUsernameAuxJudgment, {autoClose: false});
         }
 
         GM_registerMenuCommand("添加屏蔽词", menuAddBannedWords);
         GM_registerMenuCommand("删除屏蔽词", menuRemoveBannedWords);
-        GM_registerMenuCommand("查看屏蔽词列表", menuShowBannedWords);
-        GM_registerMenuCommand("清空屏蔽词列表", menuPurgeBannedWords);
         menuUpdateVariableMenuInOrder();
 
         console.log("知乎推荐流优化 已完成加载");
-        console.log("知乎推荐流优化 用户屏蔽词库: " + bannedWordsJson);
+        console.log("知乎推荐流优化 用户屏蔽词库: " + JSON.parse(bannedWordsJson).join(","));
         console.log("知乎推荐流优化 答案数量阈值: " + answerCountThreshold);
         console.log("知乎推荐流优化 新卡片数量阈值: " + newCardsThreshold);
         console.log("知乎推荐流优化 是否使用用户名作为辅助判断: " + (usernameAuxJudgment ? "是" : "否"));
+        console.log("知乎推荐流优化 是否自动对匹配屏蔽词的卡片点击不感兴趣: " + (autoSendUninterestWithBannedWordCard ? "是" : "否"));
     })();
 
     const recomBody = document.querySelector("div.Topstory-recommend");
@@ -326,10 +327,11 @@
 
     if (recomBody) {
         console.log("知乎推荐流优化 在推荐列表变动时检查卡片");
-        const obconfig = {attributes: false, childList: true, subtree: true};
-        const observer = new MutationObserver(isNodeAddedCallback);
-        observer.observe(recomBody, obconfig);
+        const bodyObConfig = {attributes: false, childList: true, subtree: true};
+        const bodyObserver = new MutationObserver(isNodeAddedCallback);
+        bodyObserver.observe(recomBody, bodyObConfig);
 
+        // 每个卡片点击时出现的浮动菜单都是直接在document.body下面新增一个套了好几层的div标签
     }
     // setInterval(showArrayContent, 5000);
     pageReloadCheck();
