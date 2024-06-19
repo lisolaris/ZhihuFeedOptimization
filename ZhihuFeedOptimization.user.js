@@ -7,7 +7,7 @@
 // @grant       GM_getValue
 // @grant       GM_registerMenuCommand
 // @grant       GM_unregisterMenuCommand
-// @version     0.2.5
+// @version     0.2.6
 // @run-at      document-idle
 // @author      lisolaris
 // @icon        https://www.google.com/s2/favicons?sz=64&domain=zhihu.com
@@ -24,7 +24,8 @@
     const DEFAULTAVATARHASH = "abed1a8c04700ba7d72b45195223e0ff";
 
     const userChecked = new Set();
-    const cardsToBeDeleted = new Set();
+    const cardsToBeDeletedWithBannedWord = new Set();
+    const cardsToBeDeletedWithDefaultAvatar = new Set();
 
     const bannedWords = new Set();
     var bannedWordsJson = GM_getValue("bannedWords", "");
@@ -35,10 +36,7 @@
     var newCardsThreshold = parseInt(GM_getValue("newCardsThreshold", "5"));
     var answerCountThreshold = parseInt(GM_getValue("answerCountThreshold", "200"));
     var usernameAuxJudgment = parseInt(GM_getValue("usernameAuxJudgment", "1"));
-
-    var setNewCardsCountThresholdMenuId = null;
-    var setAnswerCountThresholdMenuId = null;
-    var toggleUsernameAuxJudgmentMenuId = null;
+    var autoSendUninterestWithBannedWordCard = parseInt(GM_getValue("autoSendUninterestWithBannedWordCard", "1"));
 
     function checkIfBannedWordInCard(newCards){
         for (let card of newCards){
@@ -65,7 +63,7 @@
                     let extraInfo = JSON.parse(cardItem.getAttribute("data-za-extra-module"));
                     let userId = extraInfo.card.content.author_member_hash_id;
                     console.log(`%c知乎推荐流优化 待删除列表中加入: ${userId}, 原因: 用户屏蔽词 ${word}`, "color:#00A2E8");
-                    cardsToBeDeleted.add(card);
+                    cardsToBeDeletedWithBannedWord.add(card);
                     break;
                 }
             }
@@ -84,7 +82,7 @@
             let userId = extraInfo.card.content.author_member_hash_id;
 
             // 此用户已经被检查过/将要检查的卡片已经在待删除列表里 跳过检查
-            if (userChecked.has(userId) || cardsToBeDeleted.has(card)) continue;
+            if (userChecked.has(userId) || cardsToBeDeletedWithBannedWord.has(card) || cardsToBeDeletedWithDefaultAvatar.has(card)) continue;
             else {
                 try{
                     // console.log("知乎推荐流优化 查询用户 " + userId);
@@ -105,7 +103,7 @@
                                         (data.answer_count < answerCountThreshold || (usernameAuxJudgment && data.name.search(/^知乎用户/) == 0))){
                                             if (!(cardType === "article" && data.favorited_count > 50)){
                                                 console.log(`%c知乎推荐流优化 待删除列表中加入: ${userId}, 原因: 默认头像${(data.name.search(/^知乎用户/) == 0) ? ' 默认用户名': ''}, 用户回答数量: ${data.answer_count}`, "color:#00A2E8");
-                                                cardsToBeDeleted.add(card);
+                                                cardsToBeDeletedWithDefaultAvatar.add(card);
                                             }
                                     } 
                                     else{
@@ -131,37 +129,52 @@
     }
 
     function removeCard() {
-        if (cardsToBeDeleted.size > 0) {
+        // 经测试不能直接通过xhr请求向知乎api发送不感兴趣 只能通过模拟点击来实现
+        // function sendUninterestRequest(itemId){
+        //     let payload = `item_brief=%7B%22source%22%3A+%22TS%22%2C+%22type%22%3A+%22answer%22%2C+%22id%22%3A+${itemId}%7D`;
+        //     const xhr = new XMLHttpRequest();
+        //     xhr.open("POST", "https://www.zhihu.com/api/v3/feed/topstory/uninterestv2", true);
+        //     xhr.setRequestHeader("Content-type","application/x-www-form-urlencoded");
+        //     xhr.setRequestHeader("Cookie", document.cookie);
+        //     xhr.send(payload);
+        // }
+
+        if (cardsToBeDeletedWithBannedWord.size + cardsToBeDeletedWithDefaultAvatar.size > 0){
             console.log("知乎推荐流优化 开始移除卡片");
 
-            for (let card of cardsToBeDeleted){
-                let cardItem = card.querySelector("div.ContentItem");
-                let text = card.querySelector("span.RichText.ztext.CopyrightRichText-richText").textContent;
-                const urls = [];
-                if (card.querySelectorAll("meta[itemprop='url']").length != 0){
-                    for (let url of card.querySelectorAll("meta[itemprop='url']")){
-                        urls.push(url.getAttribute("content"));
+            // 研究了一圈似乎js并没有类似python中enumerate()这样的额外赋值枚举功能 先这样写着看看以后能不能找到更好的方法
+            for (let cardSet of [cardsToBeDeletedWithBannedWord, cardsToBeDeletedWithDefaultAvatar]){
+                for (let card of cardSet){
+                    let cardItem = card.querySelector("div.ContentItem");
+                    let text = card.querySelector("span.RichText.ztext.CopyrightRichText-richText").textContent;
+                    const urls = [];
+                    if (card.querySelectorAll("meta[itemprop='url']").length != 0){
+                        for (let url of card.querySelectorAll("meta[itemprop='url']")){
+                            urls.push(url.getAttribute("content"));
+                        }
                     }
+                    console.log(`%c知乎推荐流优化 已移除卡片: ${cardItem.getAttribute("data-zop")}, 原链接: ${JSON.stringify(urls)}, 预览: ${text}`, "color:#FF00FF");
+                    if (cardSet === cardsToBeDeletedWithBannedWord && autoSendUninterestWithBannedWordCard){
+
+                    }
+                    // 不可使用card.remove() 会导致点击首页顶部推荐按钮刷新页面时出错（removeChild()失败）
+                    card.setAttribute("hidden", "")
                 }
-                console.log(`%c知乎推荐流优化 已移除卡片: ${cardItem.getAttribute("data-zop")}, 原链接: ${JSON.stringify(urls)}, 预览: ${text}`, "color:#FF00FF");
-                // 不可使用card.remove() 会导致点击首页顶部推荐按钮刷新页面时出错（removeChild()失败）
-                card.setAttribute("hidden", "")
             }
-            cardsToBeDeleted.clear();
+            cardsToBeDeletedWithBannedWord.clear();
+            cardsToBeDeletedWithDefaultAvatar.clear();
         }
     }
 
     function showArrayContent() {
-        console.log(`toBeDeleted(${cardsToBeDeleted.size}): ` + JSON.stringify(Array.from(cardsToBeDeleted)));
+        console.log(`cardsToBeDeletedWithBannedWord(${cardsToBeDeletedWithBannedWord.size}): ` + JSON.stringify(Array.from(cardsToBeDeletedWithBannedWord)));
+        console.log(`cardsToBeDeletedWithDefaultAvatar(${cardsToBeDeletedWithDefaultAvatar.size}): ` + JSON.stringify(Array.from(cardsToBeDeletedWithDefaultAvatar)));
         console.log(`userChecked(${userChecked.size}): ` + JSON.stringify(Array.from(userChecked)));
     }
 
     async function checkCards(newCards=null){
         var cards;
-        if (!newCards){
-            cards = Array.from(document.getElementsByClassName("Card TopstoryItem TopstoryItem-isRecommend"));
-            console.log("知乎推荐流优化 开始初次检查")
-        }
+        if (!newCards) cards = Array.from(document.getElementsByClassName("Card TopstoryItem TopstoryItem-isRecommend"));
         else cards = newCards;
 
         console.log("知乎推荐流优化 检查新获得的推荐卡片列表……");
@@ -186,111 +199,130 @@
         }
     }
 
-    function firstLoadCheckCallback(mutationRecords, observer){
+    // 不知道为什么卡片中data-za-extra-module这个属性会在整个页面的DOM树加载完成后才被添加进去
+    // 使用MutationServer对页面中第一个卡片的属性进行监视 待此属性被添加后即对首页的卡片进行检查
+    // 不可避免地有感知（能看到卡片突然从眼前消失）
+    function pageReloadCheck(){
+        console.log("知乎推荐流优化 开始页面重加载后检查");
+        const pageReloadCheckObConfig = {attributes: true, childList: false, subtree: false};
+        const pageReloadCheckObserver = new MutationObserver(pageReloadCheckCallback);
+        const pageReloadCheckContentItemElem = document.querySelector("div.ContentItem");
+        pageReloadCheckObserver.observe(pageReloadCheckContentItemElem, pageReloadCheckObConfig);
+    }
+
+    function pageReloadCheckCallback(mutationRecords, observer){
         for (let mutation of mutationRecords)
             if (mutation.attributeName === "data-za-extra-module"){
-                console.log(mutation);
+                // console.log(mutation);
                 checkCards();
                 // 仅用于第一次加载/刷新时对页面最顶上的几个卡片进行检查 完成后即停止MutationObserver的监视
                 observer.disconnect();
             }
     }
 
-    function addBannedWords(){
-        let words = prompt("请输入屏蔽词，输入多个时以','分隔: ");
-        // console.log("知乎推荐流优化 用户输入: " + words);
-        if (words){
-            words = words.replaceAll(/\s*/g,"").replaceAll("，", ",");
+    // 油猴菜单与初始化日志相关代码 以IIFE函数的形式封装方便折叠
+    (function (){
+        var setNewCardsCountThresholdMenuId = null;
+        var setAnswerCountThresholdMenuId = null;
+        var toggleUsernameAuxJudgmentMenuId = null;
 
-            let wordlist = words.split(",");
-            for (let w of wordlist) bannedWords.add(w);
+        function menuAddBannedWords(){
+            let words = prompt("请输入屏蔽词，输入多个时以','分隔: ");
+            // console.log("知乎推荐流优化 用户输入: " + words);
+            if (words){
+                words = words.replaceAll(/\s*/g,"").replaceAll("，", ",");
 
-            bannedWordsJson = JSON.stringify(Array.from(bannedWords));
-            console.log("知乎推荐流优化 用户屏蔽词库: " + bannedWordsJson);
-            GM_setValue("bannedWords", bannedWordsJson);
-            alert(`知乎推荐流优化 已添加屏蔽词: ${JSON.stringify(wordlist)} \n当前屏蔽词库: ${bannedWordsJson}`);
+                let wordlist = words.split(",");
+                for (let w of wordlist) bannedWords.add(w);
+
+                bannedWordsJson = JSON.stringify(Array.from(bannedWords));
+                console.log("知乎推荐流优化 用户屏蔽词库: " + bannedWordsJson);
+                GM_setValue("bannedWords", bannedWordsJson);
+                alert(`知乎推荐流优化 已添加屏蔽词: ${JSON.stringify(wordlist)} \n当前屏蔽词库: ${bannedWordsJson}`);
+            }
         }
-    }
 
-    function removeBannedWords(){
-        let words = prompt("请输入要移除的屏蔽词，输入多个时以','分隔: ");
-        // console.log("知乎推荐流优化 用户输入: " + words);
-        if (words){
-            words = words.replaceAll(/\s*/g,"").replaceAll("，", ",");
+        function menuRemoveBannedWords(){
+            let words = prompt("请输入要移除的屏蔽词，输入多个时以','分隔: ");
+            // console.log("知乎推荐流优化 用户输入: " + words);
+            if (words){
+                words = words.replaceAll(/\s*/g,"").replaceAll("，", ",");
 
-            let wordlist = words.split(",");
-            for (let w of wordlist) bannedWords.delete(w);
+                let wordlist = words.split(",");
+                for (let w of wordlist) bannedWords.delete(w);
 
-            bannedWordsJson = JSON.stringify(Array.from(bannedWords));
-            console.log("知乎推荐流优化 用户屏蔽词库: " + bannedWordsJson);
-            GM_setValue("bannedWords", bannedWordsJson);
-            alert(`知乎推荐流优化 已删除屏蔽词: ${JSON.stringify(wordlist)} \n当前屏蔽词库: ${bannedWordsJson}`);
+                bannedWordsJson = JSON.stringify(Array.from(bannedWords));
+                console.log("知乎推荐流优化 用户屏蔽词库: " + bannedWordsJson);
+                GM_setValue("bannedWords", bannedWordsJson);
+                alert(`知乎推荐流优化 已删除屏蔽词: ${JSON.stringify(wordlist)} \n当前屏蔽词库: ${bannedWordsJson}`);
+            }
         }
-    }
 
-    function showBannedWords(){
-        bannedWordsJson = GM_getValue("bannedWords");
-        alert(`知乎推荐流优化 屏蔽词列表: \n${bannedWordsJson}`);
-    }
-
-    function purgeBannedWords(){
-        let decision = confirm("知乎推荐流优化 确定要清空屏蔽词列表吗？");
-        if (decision){
-            bannedWordsJson = "";
-            bannedWords.clear();
-            GM_setValue("bannedWords", bannedWordsJson);
-            alert("知乎推荐流优化 已清空屏蔽词列表");
-            console.log("知乎推荐流优化 用户屏蔽词库: " + bannedWordsJson);
+        function menuShowBannedWords(){
+            bannedWordsJson = GM_getValue("bannedWords");
+            alert(`知乎推荐流优化 屏蔽词列表: \n${bannedWordsJson}`);
         }
-    }
 
-    function setAnswerCountThreshold(){
-        let threshold = prompt("知乎推荐流优化 请输入数值: \n答案数量阈值用于确定是否移除使用默认头像，但有较多回答数的账号生产的内容", answerCountThreshold);
-        if (!isNaN(parseInt(threshold))){
-            GM_setValue("answerCountThreshold", parseInt(threshold));
-            answerCountThreshold = parseInt(threshold);
-            updateVariableMenuInOrder();
+        function menuPurgeBannedWords(){
+            let decision = confirm("知乎推荐流优化 确定要清空屏蔽词列表吗？");
+            if (decision){
+                bannedWordsJson = "";
+                bannedWords.clear();
+                GM_setValue("bannedWords", bannedWordsJson);
+                alert("知乎推荐流优化 已清空屏蔽词列表");
+                console.log("知乎推荐流优化 用户屏蔽词库: " + bannedWordsJson);
+            }
         }
-    }
 
-    function setNewCardsCountThreshold(){
-        let threshold = prompt("知乎推荐流优化 请输入数值: \n新卡片数量阈值用于设定下滑刷新内容时需要多少新卡片来触发移除机制", newCardsThreshold);
-        if (!isNaN(parseInt(threshold))){
-            GM_setValue("newCardsThreshold", parseInt(threshold));
-            newCardsThreshold = parseInt(threshold);
-            updateVariableMenuInOrder();
+        function menuSetAnswerCountThreshold(){
+            let threshold = prompt("知乎推荐流优化 请输入数值: \n答案数量阈值用于确定是否移除使用默认头像，但有较多回答数的账号生产的内容", answerCountThreshold);
+            if (!isNaN(parseInt(threshold))){
+                GM_setValue("answerCountThreshold", parseInt(threshold));
+                answerCountThreshold = parseInt(threshold);
+                menuUpdateVariableMenuInOrder();
+            }
         }
-    }
 
-    function toggleUsernameAuxJudgment(){
-        usernameAuxJudgment = !usernameAuxJudgment;
-        GM_setValue("usernameAuxJudgment", (usernameAuxJudgment ? 1 : 0));
-        updateVariableMenuInOrder();
-    }
+        function menuSetNewCardsCountThreshold(){
+            let threshold = prompt("知乎推荐流优化 请输入数值: \n新卡片数量阈值用于设定下滑刷新内容时需要多少新卡片来触发移除机制", newCardsThreshold);
+            if (!isNaN(parseInt(threshold))){
+                GM_setValue("newCardsThreshold", parseInt(threshold));
+                newCardsThreshold = parseInt(threshold);
+                menuUpdateVariableMenuInOrder();
+            }
+        }
 
-    // 用于确保刷新数据后 在脚本管理器菜单里的各个项目顺序是正确的
-    function updateVariableMenuInOrder(){
-        GM_unregisterMenuCommand(setAnswerCountThresholdMenuId);
-        GM_unregisterMenuCommand(setNewCardsCountThresholdMenuId);
-        GM_unregisterMenuCommand(toggleUsernameAuxJudgmentMenuId);
-        setAnswerCountThresholdMenuId = GM_registerMenuCommand(`设置答案数量阈值（${answerCountThreshold}）`, setAnswerCountThreshold);
-        setNewCardsCountThresholdMenuId = GM_registerMenuCommand(`设置新卡片数量阈值（${newCardsThreshold}）`, setNewCardsCountThreshold);
-        toggleUsernameAuxJudgmentMenuId = GM_registerMenuCommand(`切换用户名辅助判定（${usernameAuxJudgment ? "是" : "否"}）`, toggleUsernameAuxJudgment, {autoClose: false});
-    }
+        function menuToggleUsernameAuxJudgment(){
+            usernameAuxJudgment = !usernameAuxJudgment;
+            GM_setValue("usernameAuxJudgment", (usernameAuxJudgment ? 1 : 0));
+            menuUpdateVariableMenuInOrder();
+        }
 
-    GM_registerMenuCommand("添加屏蔽词", addBannedWords);
-    GM_registerMenuCommand("删除屏蔽词", removeBannedWords);
-    GM_registerMenuCommand("查看屏蔽词列表", showBannedWords);
-    GM_registerMenuCommand("清空屏蔽词列表", purgeBannedWords);
-    updateVariableMenuInOrder();
+        // 用于确保刷新数据后 在脚本管理器菜单里的各个项目顺序是正确的
+        function menuUpdateVariableMenuInOrder(){
+            GM_unregisterMenuCommand(setAnswerCountThresholdMenuId);
+            GM_unregisterMenuCommand(setNewCardsCountThresholdMenuId);
+            GM_unregisterMenuCommand(toggleUsernameAuxJudgmentMenuId);
+            setAnswerCountThresholdMenuId = GM_registerMenuCommand(`设置答案数量阈值（${answerCountThreshold}）`, menuSetAnswerCountThreshold);
+            setNewCardsCountThresholdMenuId = GM_registerMenuCommand(`设置新卡片数量阈值（${newCardsThreshold}）`, menuSetNewCardsCountThreshold);
+            toggleUsernameAuxJudgmentMenuId = GM_registerMenuCommand(`切换用户名辅助判定（${usernameAuxJudgment ? "是" : "否"}）`, menuToggleUsernameAuxJudgment, {autoClose: false});
+        }
 
-    console.log("知乎推荐流优化 已完成加载");
-    console.log("知乎推荐流优化 用户屏蔽词库: " + bannedWordsJson);
-    console.log("知乎推荐流优化 答案数量阈值: " + answerCountThreshold);
-    console.log("知乎推荐流优化 新卡片数量阈值: " + newCardsThreshold);
-    console.log("知乎推荐流优化 是否使用用户名作为辅助判断: " + (usernameAuxJudgment ? "是" : "否"));
+        GM_registerMenuCommand("添加屏蔽词", menuAddBannedWords);
+        GM_registerMenuCommand("删除屏蔽词", menuRemoveBannedWords);
+        GM_registerMenuCommand("查看屏蔽词列表", menuShowBannedWords);
+        GM_registerMenuCommand("清空屏蔽词列表", menuPurgeBannedWords);
+        menuUpdateVariableMenuInOrder();
+
+        console.log("知乎推荐流优化 已完成加载");
+        console.log("知乎推荐流优化 用户屏蔽词库: " + bannedWordsJson);
+        console.log("知乎推荐流优化 答案数量阈值: " + answerCountThreshold);
+        console.log("知乎推荐流优化 新卡片数量阈值: " + newCardsThreshold);
+        console.log("知乎推荐流优化 是否使用用户名作为辅助判断: " + (usernameAuxJudgment ? "是" : "否"));
+    })();
 
     const recomBody = document.querySelector("div.Topstory-recommend");
+    const recomButton = document.querySelector("a.TopstoryTabs-link.Topstory-tabsLink.is-active[aria-controls='Topstory-recommend']");
 
     if (recomBody) {
         console.log("知乎推荐流优化 在推荐列表变动时检查卡片");
@@ -299,14 +331,7 @@
         observer.observe(recomBody, obconfig);
 
     }
-    // 不知道为什么卡片中data-za-extra-module这个属性会在整个页面的DOM树加载完成后才被添加进去
-    // 使用MutationServer对页面中第一个卡片的属性进行监视 待此属性被添加后即对首页的卡片进行检查
-    // 不可避免地有感知（能看到卡片突然从眼前消失）
-    const firstLoadCheckObConfig = {attributes: true, childList: false, subtree: false};
-    const firstLoadCheckObserver = new MutationObserver(firstLoadCheckCallback);
-    const firstLoadCheckContentItemElem = document.querySelector("div.ContentItem");
-    firstLoadCheckObserver.observe(firstLoadCheckContentItemElem, firstLoadCheckObConfig);
-    // if (document.querySelector("div.ContentItem").hasAttribute("data-za-extra-module"))
-    //     checkCards();
     // setInterval(showArrayContent, 5000);
+    pageReloadCheck();
+    recomButton.addEventListener("click", pageReloadCheck);
 })();
