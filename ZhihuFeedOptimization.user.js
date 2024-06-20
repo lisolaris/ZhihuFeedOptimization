@@ -7,7 +7,7 @@
 // @grant       GM_getValue
 // @grant       GM_registerMenuCommand
 // @grant       GM_unregisterMenuCommand
-// @version     0.3.0
+// @version     0.3.1
 // @run-at      document-idle
 // @author      lisolaris
 // @icon        https://www.google.com/s2/favicons?sz=64&domain=zhihu.com
@@ -60,7 +60,7 @@
             // 每个内容卡片都具有class: "ContentItem ArticleItem"或"ContentItem AnswerItem"
             // 或是被推送到首页的专栏链接 也会有ContentItem属性
             let cardItem = card.querySelector("div.ContentItem");
-            let cardType = cardItem.className.includes("AnswerItem") ? "answer" : "article";
+            // let cardType = cardItem.className.includes("AnswerItem") ? "answer" : "article";
             let extraInfo = JSON.parse(cardItem.getAttribute("data-za-extra-module"));
             let userId = extraInfo.card.content.author_member_hash_id;
 
@@ -84,10 +84,10 @@
                                     // 真值表参见说明文档
                                     if (data.avatar_url_template.toLowerCase().includes(DEFAULTAVATARHASH) &&
                                         (data.answer_count < answerCountThreshold || (usernameAuxJudgment && data.name.search(/^知乎用户/) == 0))){
-                                            if (!(cardType === "article" && data.favorited_count > 50)){
+                                            // if (!(cardType === "article" && data.favorited_count > 50)){
                                                 console.log(`%c知乎推荐流优化 待删除列表中加入: ${userId}, 原因: 默认头像${(data.name.search(/^知乎用户/) == 0) ? ' 默认用户名': ''}, 用户回答数量: ${data.answer_count}`, "color:#00A2E8");
                                                 cardsToBeDeletedWithDefaultAvatar.add(card);
-                                            }
+                                            // }
                                     } 
                                     else{
                                         userChecked.add(userId.toLowerCase());
@@ -180,6 +180,8 @@
         if (!newCards) cards = Array.from(document.getElementsByClassName("Card TopstoryItem TopstoryItem-isRecommend"));
         else cards = newCards;
 
+        // 快速等待100ms 卡片子元素的属性添加完毕后再做检查
+        await sleep(100);
         console.log("知乎推荐流优化 检查新获得的推荐卡片列表……");
         checkIfBannedWordInCard(cards);
         checkIfAuthorDefaultAvatarInCard(cards);
@@ -251,8 +253,7 @@
             // console.log("知乎推荐流优化 用户输入: " + words);
             if (words){
                 if (words === "清空全部屏蔽词！"){
-                    let decision = confirm("知乎推荐流优化 确定要清空屏蔽词列表吗？");
-                    if (decision){
+                    if (confirm("知乎推荐流优化 确定要清空屏蔽词列表吗？")){
                         bannedWordsJson = "[]";
                         bannedWords.clear();
                         GM_setValue("bannedWords", bannedWordsJson);
@@ -297,6 +298,12 @@
             menuUpdateVariableMenuInOrder();
         }
 
+        function menuToggleAutoSendUninterest(){
+            autoSendUninterestWithBannedWordCard = !autoSendUninterestWithBannedWordCard;
+            GM_setValue("autoSendUninterestWithBannedWordCard", (autoSendUninterestWithBannedWordCard ? 1 : 0));
+            menuUpdateVariableMenuInOrder();
+        }
+
         // 用于确保刷新数据后 在脚本管理器菜单里的各个项目顺序是正确的
         function menuUpdateVariableMenuInOrder(){
             GM_unregisterMenuCommand(setAnswerCountThresholdMenuId);
@@ -307,7 +314,7 @@
             setAnswerCountThresholdMenuId = GM_registerMenuCommand(`设置答案数量阈值（${answerCountThreshold}）`, menuSetAnswerCountThreshold);
             setNewCardsCountThresholdMenuId = GM_registerMenuCommand(`设置新卡片数量阈值（${newCardsThreshold}）`, menuSetNewCardsCountThreshold);
             toggleUsernameAuxJudgmentMenuId = GM_registerMenuCommand(`切换用户名辅助判定（${usernameAuxJudgment ? "是" : "否"}）`, menuToggleUsernameAuxJudgment, {autoClose: false});
-            toggleAutoSendUninterestMenuId = GM_registerMenuCommand(`切换自动点击不感兴趣（${autoSendUninterestWithBannedWordCard ? "是" : "否"}）`, menuToggleUsernameAuxJudgment, {autoClose: false});
+            toggleAutoSendUninterestMenuId = GM_registerMenuCommand(`切换自动点击不感兴趣（${autoSendUninterestWithBannedWordCard ? "是" : "否"}）`, menuToggleAutoSendUninterest, {autoClose: false});
         }
 
         GM_registerMenuCommand("添加屏蔽词", menuAddBannedWords);
@@ -330,8 +337,6 @@
         const bodyObConfig = {attributes: false, childList: true, subtree: true};
         const bodyObserver = new MutationObserver(isNodeAddedCallback);
         bodyObserver.observe(recomBody, bodyObConfig);
-
-        // 每个卡片点击时出现的浮动菜单都是直接在document.body下面新增一个套了好几层的div标签
     }
     // setInterval(showArrayContent, 5000);
     pageReloadCheck();
