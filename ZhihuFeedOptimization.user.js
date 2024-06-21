@@ -44,8 +44,7 @@
             for (let word of bannedWords){
                 if (card.querySelector("h2").textContent.includes(word)){
                     let cardItem = card.querySelector("div.ContentItem");
-                    let extraInfo = JSON.parse(cardItem.getAttribute("data-za-extra-module"));
-                    let userId = extraInfo.card.content.author_member_hash_id;
+                    let userId = JSON.parse(cardItem.getAttribute("data-za-extra-module")).card.content.author_member_hash_id;
                     console.log(`%c知乎推荐流优化 待删除列表中加入: ${userId}, 原因: 用户屏蔽词 ${word}`, "color:#00A2E8");
                     cardsToBeDeletedWithBannedWord.add(card);
                     break;
@@ -57,12 +56,13 @@
     async function checkIfAuthorDefaultAvatarInCard(newCards){
         const fetchPromises = [];
         for (let card of newCards) {
+            // 快速等待300ms 卡片子元素的属性添加完毕后再做检查
+            await sleep(300);
             // 每个内容卡片都具有class: "ContentItem ArticleItem"或"ContentItem AnswerItem"
             // 或是被推送到首页的专栏链接 也会有ContentItem属性
             let cardItem = card.querySelector("div.ContentItem");
             // let cardType = cardItem.className.includes("AnswerItem") ? "answer" : "article";
-            let extraInfo = JSON.parse(cardItem.getAttribute("data-za-extra-module"));
-            let userId = extraInfo.card.content.author_member_hash_id;
+            let userId = JSON.parse(cardItem.getAttribute("data-za-extra-module")).card.content.author_member_hash_id;
 
             // 此用户已经被检查过/将要检查的卡片已经在待删除列表里 跳过检查
             if (userChecked.has(userId) || cardsToBeDeletedWithBannedWord.has(card) || cardsToBeDeletedWithDefaultAvatar.has(card)) continue;
@@ -137,29 +137,27 @@
                         }
                     }
                     // 对来自屏蔽词的卡片点击不感兴趣
-                    if (cardSet === cardsToBeDeletedWithBannedWord && autoSendUninterestWithBannedWordCard){
+                    let isAutoSendUninterest = Boolean(cardSet === cardsToBeDeletedWithBannedWord && autoSendUninterestWithBannedWordCard);
+                    if (isAutoSendUninterest){
                         const floatLayerMenuObConfig = {attributes: false, childList: true, subtree: false};
                         const floatLayerMenuObserver = new MutationObserver(function(mutationRecords, observer){
                             for (let mutation of mutationRecords){
                                 if (mutation.addedNodes.length != 0){
                                     let popWind = mutation.addedNodes[0].querySelector("div.Popover-content");
-                                    if (popWind){
-                                        for (let button of popWind.querySelectorAll("button.AnswerItem-selfMenuItem")){
-                                            if (button.innerText === "不感兴趣"){
+                                    if (popWind)
+                                        for (let button of popWind.querySelectorAll("button.AnswerItem-selfMenuItem"))
+                                            if (button.innerText === "不感兴趣")
                                                 button.click();
-                                                isNotInterested = true;
-                                            }
-                                        }
-                                    }
                                 }
                             }
+
                             observer.disconnect();
                         });
                         floatLayerMenuObserver.observe(document.body, floatLayerMenuObConfig);
                         // 在开始监视后再点击按钮
                         card.querySelector("button.Button.OptionsButton").click();
                     }
-                    console.log(`%c知乎推荐流优化 已移除卡片: ${cardItem.getAttribute("data-zop")}, 原链接: ${JSON.stringify(urls)}, 预览: ${text}, 已不感兴趣: ${autoSendUninterestWithBannedWordCard ? "是" : "否"}`, "color:#FF00FF");
+                    console.log(`%c知乎推荐流优化 已移除卡片: ${cardItem.getAttribute("data-zop")}, 原链接: ${JSON.stringify(urls)}, 预览: ${text}, 已不感兴趣: ${isAutoSendUninterest ? "是" : "否"}`, "color:#FF00FF");
                     // 不可使用card.remove() 会导致点击首页顶部推荐按钮刷新页面时出错（removeChild()失败）
                     card.setAttribute("hidden", "")
                 }
@@ -180,8 +178,7 @@
         if (!newCards) cards = Array.from(document.getElementsByClassName("Card TopstoryItem TopstoryItem-isRecommend"));
         else cards = newCards;
 
-        // 快速等待100ms 卡片子元素的属性添加完毕后再做检查
-        await sleep(100);
+        await sleep(200);
         console.log("知乎推荐流优化 检查新获得的推荐卡片列表……");
         checkIfBannedWordInCard(cards);
         checkIfAuthorDefaultAvatarInCard(cards);
