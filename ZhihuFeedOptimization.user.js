@@ -203,9 +203,10 @@
 
     // 不知道为什么卡片中data-za-extra-module这个属性会在整个页面的DOM树加载完成后才被添加进去
     // 使用MutationServer对页面中第一个卡片的属性进行监视 待此属性被添加后即对首页的卡片进行检查
-    // 不可避免地有感知（能看到卡片突然从眼前消失）
-    function pageReloadCheck(){
+    // 由于需要等待页面加载完成（至少第一个ContentItem被加载出来）故不可避免地有感知（能看到卡片突然从眼前消失）
+    async function pageReloadCheck(){
         console.log("知乎推荐流优化 开始页面重加载后检查");
+        await sleep(1000);
         const pageReloadCheckObConfig = {attributes: true, childList: false, subtree: false};
         const pageReloadCheckObserver = new MutationObserver(pageReloadCheckCallback);
         const pageReloadCheckContentItemElem = document.querySelector("div.ContentItem");
