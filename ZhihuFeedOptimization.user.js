@@ -7,7 +7,7 @@
 // @grant       GM_getValue
 // @grant       GM_registerMenuCommand
 // @grant       GM_unregisterMenuCommand
-// @version     0.3.1
+// @version     0.3.3
 // @run-at      document-idle
 // @author      lisolaris
 // @icon        https://www.google.com/s2/favicons?sz=64&domain=zhihu.com
@@ -16,7 +16,7 @@
 // @updateURL https://update.greasyfork.org/scripts/498139/%E7%9F%A5%E4%B9%8E%E6%8E%A8%E8%8D%90%E6%B5%81%E4%BC%98%E5%8C%96.user.js
 // ==/UserScript==
 
-(function () {
+(async  function () {
     'use strict';
 
     const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -38,8 +38,10 @@
     var usernameAuxJudgment = parseInt(GM_getValue("usernameAuxJudgment", "1"));
     var autoSendUninterestWithBannedWordCard = parseInt(GM_getValue("autoSendUninterestWithBannedWordCard", "1"));
 
-    function checkIfBannedWordInCard(newCards){
+    async function checkIfBannedWordInCard(newCards){
         for (let card of newCards){
+            // 等待 并心怀希望 卡片子元素的属性添加完毕后再做检查
+            // for (let i=0; i<10 || !card.querySelector("div.ContentItem").hasAttribute("data-za-extra-module"); i++) console.log(`checkIfBannedWordInCard 等待${i}次`);
             // 检查标题是否含有用户屏蔽词
             for (let word of bannedWords){
                 if (card.querySelector("h2").textContent.includes(word)){
@@ -53,75 +55,69 @@
         }
     }
 
+    // 为了获取评论区的用户回答数量 将检查用户信息的部分分离出来
+    async function checkIfUserMatchedConditions(userId){
+        let userInfo = {"matched": false, "isDefaultAvatar": false, "isDefaultUsername":false, "answerCount": 0};
+        let fetchPromises = [];
+        // console.log("知乎推荐流优化 查询用户 " + userId);
+        fetchPromises.push(
+            fetch(`https://api.zhihu.com/people/${userId}/profile?profile_new_version=1`)
+                .then(response => response.json())
+                .then(data => {
+                    // data.error: 大量请求知乎api后被反爬虫识别 需要到所给出的页面中进行真人验证
+                    if (data.error){
+                        alert("知乎推荐流优化 需要进行真人验证，请在打开的窗口中完成！");
+                        window.open(data.error.redirect);
+                    }
+                    else {
+                        // console.log("用户 " + userId + " 头像URL " + data.avatar_url_template);
+                        // 判定条件: 是默认头像 且 (回答数小于设定阈值 或 (用户是否启用 与 以“知乎用户”为用户名的开头))
+                        // 真值表参见说明文档
+                        userInfo["isDefaultAvatar"] = data.avatar_url_template.toLowerCase().includes(DEFAULTAVATARHASH);
+                        userInfo["isDefaultUsername"] = data.name.search(/^知乎用户/) == 0;
+                        userInfo["answerCount"] = data.answer_count;
+
+                        if (userInfo["isDefaultAvatar"] && (userInfo["answerCount"] < answerCountThreshold || (usernameAuxJudgment && userInfo["isDefaultUsername"])))
+                                // if (!(cardType === "article" && data.favorited_count > 50)){
+                                userInfo["matched"] = true;
+                    }
+                })
+                .catch(error => {
+                    console.error('发生错误：', error);
+                })
+        );
+        await Promise.all(fetchPromises);
+        fetchPromises.length = 0;
+        return userInfo;
+    }
+
     async function checkIfAuthorDefaultAvatarInCard(newCards){
-        const fetchPromises = [];
         for (let card of newCards) {
-            // 快速等待300ms 卡片子元素的属性添加完毕后再做检查
-            await sleep(300);
-            // 每个内容卡片都具有class: "ContentItem ArticleItem"或"ContentItem AnswerItem"
-            // 或是被推送到首页的专栏链接 也会有ContentItem属性
-            let cardItem = card.querySelector("div.ContentItem");
-            // let cardType = cardItem.className.includes("AnswerItem") ? "answer" : "article";
-            let userId = JSON.parse(cardItem.getAttribute("data-za-extra-module")).card.content.author_member_hash_id;
+            // for (let i=0; i<10 || !card.querySelector("div.ContentItem").hasAttribute("data-za-extra-module"); i++) console.log(`checkIfAuthorDefaultAvatarInCard 等待${i}次`);
+            let userId = JSON.parse(card.querySelector("div.ContentItem").getAttribute("data-za-extra-module")).card.content.author_member_hash_id;
 
             // 此用户已经被检查过/将要检查的卡片已经在待删除列表里 跳过检查
             if (userChecked.has(userId) || cardsToBeDeletedWithBannedWord.has(card) || cardsToBeDeletedWithDefaultAvatar.has(card)) continue;
             else {
                 try{
-                    // console.log("知乎推荐流优化 查询用户 " + userId);
-                    fetchPromises.push(
-                        fetch(`https://api.zhihu.com/people/${userId}/profile?profile_new_version=1`)
-                            .then(response => response.json())
-                            .then(data => {
-                                // data.error: 大量请求知乎api后被反爬虫识别 需要到所给出的页面中进行真人验证
-                                if (data.error){
-                                    alert("知乎推荐流优化 需要进行真人验证，请在打开的窗口中完成！");
-                                    window.open(data.error.redirect);
-                                }
-                                else {
-                                    // console.log("用户 " + userId + " 头像URL " + data.avatar_url_template);
-                                    // 判定条件: 是默认头像 且 (回答数小于设定阈值 或 (用户是否启用 与 以“知乎用户”为用户名的开头))
-                                    // 真值表参见说明文档
-                                    if (data.avatar_url_template.toLowerCase().includes(DEFAULTAVATARHASH) &&
-                                        (data.answer_count < answerCountThreshold || (usernameAuxJudgment && data.name.search(/^知乎用户/) == 0))){
-                                            // if (!(cardType === "article" && data.favorited_count > 50)){
-                                                console.log(`%c知乎推荐流优化 待删除列表中加入: ${userId}, 原因: 默认头像${(data.name.search(/^知乎用户/) == 0) ? ' 默认用户名': ''}, 用户回答数量: ${data.answer_count}`, "color:#00A2E8");
-                                                cardsToBeDeletedWithDefaultAvatar.add(card);
-                                            // }
-                                    } 
-                                    else{
-                                        userChecked.add(userId.toLowerCase());
-                                    }
-                                }
-                            })
-                            .catch(error => {
-                                console.error('发生错误：', error);
-                            })
-                    );
+                    let userInfo = checkIfUserMatchedConditions(userId);
+                    if (userInfo["matched"]){
+                        console.log(`%c知乎推荐流优化 待删除列表中加入: ${userId}, 原因: 默认头像${userInfo["isDefaultUsername"] ? ' 默认用户名': ''}, 用户回答数量: ${userInfo["answerCount"]}`, "color:#00A2E8");
+                        cardsToBeDeletedWithDefaultAvatar.add(card);
+                    }
+                    else userChecked.add(userId.toLowerCase());
                 }
                 catch (e){
                     console.error(e);
                 }
             }
         }
-        await Promise.all(fetchPromises);
 
         console.log("知乎推荐流优化 完成检查");
         removeCard();
-        fetchPromises.length = 0;
     }
 
     function removeCard() {
-        // 经测试不能直接通过xhr请求向知乎api发送不感兴趣 只能通过模拟点击来实现
-        // function sendUninterestRequest(itemId){
-        //     let payload = `item_brief=%7B%22source%22%3A+%22TS%22%2C+%22type%22%3A+%22answer%22%2C+%22id%22%3A+${itemId}%7D`;
-        //     const xhr = new XMLHttpRequest();
-        //     xhr.open("POST", "https://www.zhihu.com/api/v3/feed/topstory/uninterestv2", true);
-        //     xhr.setRequestHeader("Content-type","application/x-www-form-urlencoded");
-        //     xhr.setRequestHeader("Cookie", document.cookie);
-        //     xhr.send(payload);
-        // }
-
         if (cardsToBeDeletedWithBannedWord.size + cardsToBeDeletedWithDefaultAvatar.size > 0){
             console.log("知乎推荐流优化 开始移除卡片");
 
@@ -129,14 +125,14 @@
             for (let cardSet of [cardsToBeDeletedWithBannedWord, cardsToBeDeletedWithDefaultAvatar]){
                 for (let card of cardSet){
                     let cardItem = card.querySelector("div.ContentItem");
-                    let text = card.querySelector("span.RichText.ztext.CopyrightRichText-richText").textContent;
+                    let cardText = card.querySelector("span.RichText.ztext.CopyrightRichText-richText").textContent;
                     const urls = [];
                     if (card.querySelectorAll("meta[itemprop='url']").length != 0){
                         for (let url of card.querySelectorAll("meta[itemprop='url']")){
                             urls.push(url.getAttribute("content"));
                         }
                     }
-                    // 对来自屏蔽词的卡片点击不感兴趣
+                    // 经测试不能直接通过xhr请求向知乎api发送不感兴趣 只能通过模拟点击来实现
                     let isAutoSendUninterest = Boolean(cardSet === cardsToBeDeletedWithBannedWord && autoSendUninterestWithBannedWordCard);
                     if (isAutoSendUninterest){
                         const floatLayerMenuObConfig = {attributes: false, childList: true, subtree: false};
@@ -157,7 +153,7 @@
                         // 在开始监视后再点击按钮
                         card.querySelector("button.Button.OptionsButton").click();
                     }
-                    console.log(`%c知乎推荐流优化 已移除卡片: ${cardItem.getAttribute("data-zop")}, 原链接: ${JSON.stringify(urls)}, 预览: ${text}, 已不感兴趣: ${isAutoSendUninterest ? "是" : "否"}`, "color:#FF00FF");
+                    console.log(`%c知乎推荐流优化 已移除卡片: ${cardItem.getAttribute("data-zop")}, 原链接: ${JSON.stringify(urls)}, 预览: ${cardText}, 已不感兴趣: ${isAutoSendUninterest ? "是" : "否"}`, "color:#FF00FF");
                     // 不可使用card.remove() 会导致点击首页顶部推荐按钮刷新页面时出错（removeChild()失败）
                     card.setAttribute("hidden", "")
                 }
@@ -167,10 +163,40 @@
         }
     }
 
-    function showArrayContent() {
-        console.log(`cardsToBeDeletedWithBannedWord(${cardsToBeDeletedWithBannedWord.size}): ` + JSON.stringify(Array.from(cardsToBeDeletedWithBannedWord)));
-        console.log(`cardsToBeDeletedWithDefaultAvatar(${cardsToBeDeletedWithDefaultAvatar.size}): ` + JSON.stringify(Array.from(cardsToBeDeletedWithDefaultAvatar)));
-        console.log(`userChecked(${userChecked.size}): ` + JSON.stringify(Array.from(userChecked)));
+    async function commentCheck(card){
+        console.log("知乎推荐流优化 开始检查评论区");
+        const commentUnfoldObConfig = {attributes: false, childList: true, subtree: true};
+        const commentUnfoldObserver = new MutationObserver(function (mutationRecords, observer){
+            for (let mutation of mutationRecords)
+                if (mutation.addedNodes.length > 0)
+                    for (let node of mutation.addedNodes)
+                        for (let a of node.querySelectorAll('a'))
+                            if (a.getAttribute("href").includes("zhihu.com/people"))
+                                for (let img of a.querySelectorAll("img"))
+                                    if (img.getAttribute("src").includes(DEFAULTAVATARHASH)){
+                                        let userIdSubstrIndex = a.getAttribute("href").search(/people\/.+/);
+                                        let userId = a.getAttribute("href").substring(userIdSubstrIndex + 7);
+                                        let userInfo = checkIfUserMatchedConditions(userId);
+
+                                        let userName = img.getAttribute("alt");
+                                        let commentContent = a.parentNode.parentNode.parentNode.querySelector('p').innerText;
+                                        if (userInfo["matched"]){
+                                            console.log(`%c知乎推荐流优化 已移除评论: ${userName}： ${commentContent}`, "color:#FF00FF");
+                                        // 没找到特别好的方法区分整个评论区列表的div和单独一条评论 用往上倒查四代的方式获取默认头像用户的评论节点
+                                            a.parentNode.parentNode.parentNode.parentNode.setAttribute("hidden", "");
+                                        }
+
+                                    }
+        });
+        await sleep(500);
+        commentUnfoldObserver.observe(card, commentUnfoldObConfig);
+    }
+
+    function commentButtonAddEventListener(cards){
+        for (let card of cards)
+            for (let button of card.querySelectorAll("button.Button.ContentItem-action"))
+                if (button.innerText.includes("评论"))
+                    button.addEventListener("click", (() => commentCheck(card)));
     }
 
     async function checkCards(newCards=null){
@@ -178,10 +204,11 @@
         if (!newCards) cards = Array.from(document.getElementsByClassName("Card TopstoryItem TopstoryItem-isRecommend"));
         else cards = newCards;
 
-        await sleep(200);
+        // for (let c of cards) console.log(c.querySelector('h2').innerText);
         console.log("知乎推荐流优化 检查新获得的推荐卡片列表……");
         checkIfBannedWordInCard(cards);
         checkIfAuthorDefaultAvatarInCard(cards);
+        // commentButtonAddEventListener(cards);
     }
 
     // 当检查到推荐流列表发生更新时的回调函数
@@ -204,23 +231,22 @@
     // 不知道为什么卡片中data-za-extra-module这个属性会在整个页面的DOM树加载完成后才被添加进去
     // 使用MutationServer对页面中第一个卡片的属性进行监视 待此属性被添加后即对首页的卡片进行检查
     // 由于需要等待页面加载完成（至少第一个ContentItem被加载出来）故不可避免地有感知（能看到卡片突然从眼前消失）
-    async function pageReloadCheck(){
-        console.log("知乎推荐流优化 开始页面重加载后检查");
-        await sleep(1000);
+    async function pageReloadCheck(sleepTime){
+        console.log(`知乎推荐流优化 等待${sleepTime}ms再开始页面重加载后检查`);
+        await sleep(sleepTime);
         const pageReloadCheckObConfig = {attributes: true, childList: false, subtree: false};
-        const pageReloadCheckObserver = new MutationObserver(pageReloadCheckCallback);
+        const pageReloadCheckObserver = new MutationObserver(function (mutationRecords, observer){
+            for (let mutation of mutationRecords)
+                if (mutation.attributeName === "data-za-extra-module"){
+                    // console.log(mutation);
+                    checkCards();
+                    // 仅用于第一次加载/刷新时对页面最顶上的几个卡片进行检查 完成后即停止MutationObserver的监视
+                    observer.disconnect();
+                }
+            }
+        );
         const pageReloadCheckContentItemElem = document.querySelector("div.ContentItem");
         pageReloadCheckObserver.observe(pageReloadCheckContentItemElem, pageReloadCheckObConfig);
-    }
-
-    function pageReloadCheckCallback(mutationRecords, observer){
-        for (let mutation of mutationRecords)
-            if (mutation.attributeName === "data-za-extra-module"){
-                // console.log(mutation);
-                checkCards();
-                // 仅用于第一次加载/刷新时对页面最顶上的几个卡片进行检查 完成后即停止MutationObserver的监视
-                observer.disconnect();
-            }
     }
 
     // 油猴菜单与初始化日志相关代码 以IIFE函数的形式封装方便折叠
@@ -330,13 +356,19 @@
     const recomBody = document.querySelector("div.Topstory-recommend");
     const recomButton = document.querySelector("a.TopstoryTabs-link.Topstory-tabsLink.is-active[aria-controls='Topstory-recommend']");
 
-    if (recomBody) {
-        console.log("知乎推荐流优化 在推荐列表变动时检查卡片");
-        const bodyObConfig = {attributes: false, childList: true, subtree: true};
-        const bodyObserver = new MutationObserver(isNodeAddedCallback);
-        bodyObserver.observe(recomBody, bodyObConfig);
-    }
-    // setInterval(showArrayContent, 5000);
-    pageReloadCheck();
-    recomButton.addEventListener("click", pageReloadCheck);
+    recomButton.addEventListener("click", (() => pageReloadCheck(1500)));
+    const bodyObConfig = {attributes: false, childList: true, subtree: true};
+    const bodyObserver = new MutationObserver(isNodeAddedCallback);
+    bodyObserver.observe(recomBody, bodyObConfig);
+    // setInterval(function() {
+    //     console.log(`cardsToBeDeletedWithBannedWord(${cardsToBeDeletedWithBannedWord.size}): ` + JSON.stringify(Array.from(cardsToBeDeletedWithBannedWord)));
+    //     console.log(`cardsToBeDeletedWithDefaultAvatar(${cardsToBeDeletedWithDefaultAvatar.size}): ` + JSON.stringify(Array.from(cardsToBeDeletedWithDefaultAvatar)));
+    //     console.log(`userChecked(${userChecked.size}): ` + JSON.stringify(Array.from(userChecked)));
+    // },
+    // 5000);
+    console.log("知乎推荐流优化v0.3.3 已加载完成");
+
+    // 首次加载时间较长 等待后再做检查
+    await sleep(2000);
+    checkCards();
 })();
