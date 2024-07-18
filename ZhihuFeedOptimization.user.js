@@ -7,7 +7,7 @@
 // @grant       GM_getValue
 // @grant       GM_registerMenuCommand
 // @grant       GM_unregisterMenuCommand
-// @version     0.3.3
+// @version     0.3.4
 // @run-at      document-idle
 // @author      lisolaris
 // @icon        https://www.google.com/s2/favicons?sz=64&domain=zhihu.com
@@ -22,6 +22,7 @@
     const sleep = ms => new Promise(r => setTimeout(r, ms));
 
     const DEFAULTAVATARHASH = "abed1a8c04700ba7d72b45195223e0ff";
+    const DEFAULTAVATARHASHEXTENDS = new Set(["e1b6192aa0d8dcf140ba189dea518a4c", "1abe7b115ea0ab9e5dfe334d5a1fef38", "f1be5ed24936a7311e75da3884b2bd6d", "e5aeb4872c80f1b3edccc46617dfe3de", "10b20470e80a6274affe25aeba407dce", "5fc67a2efe2e8f52b40fac8a80da1442", "25ac7c0d6225fc37e7f4419d75895b22"]);
 
     const userChecked = new Set();
     const cardsToBeDeletedWithBannedWord = new Set();
@@ -37,6 +38,7 @@
     var answerCountThreshold = parseInt(GM_getValue("answerCountThreshold", "100"));
     var usernameAuxJudgment = parseInt(GM_getValue("usernameAuxJudgment", "1"));
     var autoSendUninterestWithBannedWordCard = parseInt(GM_getValue("autoSendUninterestWithBannedWordCard", "1"));
+    var useExtendAvatarDatabase = parseInt(GM_getValue("useExtendAvatarDatabase", "0"));
 
     async function checkIfBannedWordInCard(newCards){
         for (let card of newCards){
@@ -74,6 +76,10 @@
                         // 判定条件: 是默认头像 且 (回答数小于设定阈值 或 (用户是否启用 与 以“知乎用户”为用户名的开头))
                         // 真值表参见说明文档
                         userInfo["isDefaultAvatar"] = data.avatar_url_template.toLowerCase().includes(DEFAULTAVATARHASH);
+                        if (useExtendAvatarDatabase)
+                            for (let hash of DEFAULTAVATARHASHEXTENDS)
+                                userInfo["isDefaultAvatar"] |= data.avatar_url_template.toLowerCase().includes(hash);
+
                         userInfo["isDefaultUsername"] = data.name.search(/^知乎用户/) == 0;
                         userInfo["answerCount"] = data.answer_count;
 
@@ -94,6 +100,9 @@
     async function checkIfAuthorDefaultAvatarInCard(newCards){
         for (let card of newCards) {
             // for (let i=0; i<10 || !card.querySelector("div.ContentItem").hasAttribute("data-za-extra-module"); i++) console.log(`checkIfAuthorDefaultAvatarInCard 等待${i}次`);
+            if (!card.querySelector("div.ContentItem").hasAttribute("data-za-extra-module"))
+                await sleep(500);
+
             let userId = JSON.parse(card.querySelector("div.ContentItem").getAttribute("data-za-extra-module")).card.content.author_member_hash_id;
 
             // 此用户已经被检查过/将要检查的卡片已经在待删除列表里 跳过检查
@@ -172,8 +181,13 @@
                     for (let node of mutation.addedNodes)
                         for (let a of node.querySelectorAll('a'))
                             if (a.getAttribute("href").includes("zhihu.com/people"))
-                                for (let img of a.querySelectorAll("img"))
-                                    if (img.getAttribute("src").includes(DEFAULTAVATARHASH)){
+                                for (let img of a.querySelectorAll("img")){
+                                    let flag = img.getAttribute("src").includes(DEFAULTAVATARHASH);
+                                    if (useExtendAvatarDatabase)
+                                        for (let hash of DEFAULTAVATARHASHEXTENDS)
+                                            flag |= img.getAttribute("src").includes(hash);
+
+                                    if (img.getAttribute("src").includes(hash)){
                                         let userIdSubstrIndex = a.getAttribute("href").search(/people\/.+/);
                                         let userId = a.getAttribute("href").substring(userIdSubstrIndex + 7);
                                         let userInfo = checkIfUserMatchedConditions(userId);
@@ -185,8 +199,8 @@
                                         // 没找到特别好的方法区分整个评论区列表的div和单独一条评论 用往上倒查四代的方式获取默认头像用户的评论节点
                                             a.parentNode.parentNode.parentNode.parentNode.setAttribute("hidden", "");
                                         }
-
                                     }
+                                }
         });
         await sleep(500);
         commentUnfoldObserver.observe(card, commentUnfoldObConfig);
@@ -251,10 +265,11 @@
 
     // 油猴菜单与初始化日志相关代码 以IIFE函数的形式封装方便折叠
     (function (){
-        var setNewCardsCountThresholdMenuId = null;
-        var setAnswerCountThresholdMenuId = null;
-        var toggleUsernameAuxJudgmentMenuId = null;
-        var toggleAutoSendUninterestMenuId = null;
+        var menuId_setNewCardsCountThreshold = null;
+        var menuId_setAnswerCountThreshold = null;
+        var menuId_toggleUsernameAuxJudgment = null;
+        var menuId_toggleAutoSendUninterest = null;
+        var menuId_toggleUseExtendAvatarDatabase = null;
 
         function menuAddBannedWords(){
             let words = prompt("请输入屏蔽词，输入多个时以','分隔: ");
@@ -328,17 +343,25 @@
             menuUpdateVariableMenuInOrder();
         }
 
+        function menuToggleUseExtendAvatarDatabase(){
+            useExtendAvatarDatabase = !useExtendAvatarDatabase;
+            GM_setValue("useExtendAvatarDatabase", (useExtendAvatarDatabase ? 1 : 0));
+            menuUpdateVariableMenuInOrder();
+        }
+
         // 用于确保刷新数据后 在脚本管理器菜单里的各个项目顺序是正确的
         function menuUpdateVariableMenuInOrder(){
-            GM_unregisterMenuCommand(setAnswerCountThresholdMenuId);
-            GM_unregisterMenuCommand(setNewCardsCountThresholdMenuId);
-            GM_unregisterMenuCommand(toggleUsernameAuxJudgmentMenuId);
-            GM_unregisterMenuCommand(toggleAutoSendUninterestMenuId);
+            GM_unregisterMenuCommand(menuId_setAnswerCountThreshold);
+            GM_unregisterMenuCommand(menuId_setNewCardsCountThreshold);
+            GM_unregisterMenuCommand(menuId_toggleUsernameAuxJudgment);
+            GM_unregisterMenuCommand(menuId_toggleAutoSendUninterest);
+            GM_unregisterMenuCommand(menuId_toggleUseExtendAvatarDatabase);
 
-            setAnswerCountThresholdMenuId = GM_registerMenuCommand(`设置答案数量阈值（${answerCountThreshold}）`, menuSetAnswerCountThreshold);
-            setNewCardsCountThresholdMenuId = GM_registerMenuCommand(`设置新卡片数量阈值（${newCardsThreshold}）`, menuSetNewCardsCountThreshold);
-            toggleUsernameAuxJudgmentMenuId = GM_registerMenuCommand(`切换用户名辅助判定（${usernameAuxJudgment ? "是" : "否"}）`, menuToggleUsernameAuxJudgment, {autoClose: false});
-            toggleAutoSendUninterestMenuId = GM_registerMenuCommand(`切换自动点击不感兴趣（${autoSendUninterestWithBannedWordCard ? "是" : "否"}）`, menuToggleAutoSendUninterest, {autoClose: false});
+            menuId_setAnswerCountThreshold = GM_registerMenuCommand(`设置答案数量阈值（${answerCountThreshold}）`, menuSetAnswerCountThreshold);
+            menuId_setNewCardsCountThreshold = GM_registerMenuCommand(`设置新卡片数量阈值（${newCardsThreshold}）`, menuSetNewCardsCountThreshold);
+            menuId_toggleUsernameAuxJudgment = GM_registerMenuCommand(`切换用户名辅助判定（${usernameAuxJudgment ? "是" : "否"}）`, menuToggleUsernameAuxJudgment, {autoClose: false});
+            menuId_toggleAutoSendUninterest = GM_registerMenuCommand(`切换自动点击不感兴趣（${autoSendUninterestWithBannedWordCard ? "是" : "否"}）`, menuToggleAutoSendUninterest, {autoClose: false});
+            menuId_toggleUseExtendAvatarDatabase = GM_registerMenuCommand(`切换使用扩展默认头像库（${useExtendAvatarDatabase ? "是" : "否"}）`, menuToggleUseExtendAvatarDatabase, {autoClose: false});
         }
 
         GM_registerMenuCommand("添加屏蔽词", menuAddBannedWords);
@@ -351,6 +374,7 @@
         console.log("知乎推荐流优化 新卡片数量阈值: " + newCardsThreshold);
         console.log("知乎推荐流优化 是否使用用户名作为辅助判断: " + (usernameAuxJudgment ? "是" : "否"));
         console.log("知乎推荐流优化 是否自动对匹配屏蔽词的卡片点击不感兴趣: " + (autoSendUninterestWithBannedWordCard ? "是" : "否"));
+        console.log("知乎推荐流优化 是否使用扩展默认头像库: " + (useExtendAvatarDatabase ? "是" : "否"));
     })();
 
     const recomBody = document.querySelector("div.Topstory-recommend");
@@ -366,7 +390,7 @@
     //     console.log(`userChecked(${userChecked.size}): ` + JSON.stringify(Array.from(userChecked)));
     // },
     // 5000);
-    console.log("知乎推荐流优化v0.3.3 已加载完成");
+    console.log("知乎推荐流优化v0.3.4 已加载完成");
 
     // 首次加载时间较长 等待后再做检查
     await sleep(2000);
