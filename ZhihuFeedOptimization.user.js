@@ -7,7 +7,7 @@
 // @grant       GM_getValue
 // @grant       GM_registerMenuCommand
 // @grant       GM_unregisterMenuCommand
-// @version     0.3.4
+// @version     0.3.5
 // @run-at      document-idle
 // @author      lisolaris
 // @icon        https://www.google.com/s2/favicons?sz=64&domain=zhihu.com
@@ -173,47 +173,6 @@
         }
     }
 
-    async function commentCheck(card){
-        console.log("知乎推荐流优化 开始检查评论区");
-        const commentUnfoldObConfig = {attributes: false, childList: true, subtree: true};
-        const commentUnfoldObserver = new MutationObserver(function (mutationRecords, observer){
-            for (let mutation of mutationRecords)
-                if (mutation.addedNodes.length > 0)
-                    for (let node of mutation.addedNodes)
-                        for (let a of node.querySelectorAll('a'))
-                            if (a.getAttribute("href").includes("zhihu.com/people"))
-                                for (let img of a.querySelectorAll("img")){
-                                    let flag = img.getAttribute("src").includes(DEFAULTAVATARHASH);
-                                    if (useExtendAvatarDatabase)
-                                        for (let hash of DEFAULTAVATARHASHEXTENDS)
-                                            flag |= img.getAttribute("src").includes(hash);
-
-                                    if (img.getAttribute("src").includes(hash)){
-                                        let userIdSubstrIndex = a.getAttribute("href").search(/people\/.+/);
-                                        let userId = a.getAttribute("href").substring(userIdSubstrIndex + 7);
-                                        let userInfo = checkIfUserMatchedConditions(userId);
-
-                                        let userName = img.getAttribute("alt");
-                                        let commentContent = a.parentNode.parentNode.parentNode.querySelector('p').innerText;
-                                        if (userInfo["matched"]){
-                                            console.log(`%c知乎推荐流优化 已移除评论: ${userName}： ${commentContent}`, "color:#FF00FF");
-                                        // 没找到特别好的方法区分整个评论区列表的div和单独一条评论 用往上倒查四代的方式获取默认头像用户的评论节点
-                                            a.parentNode.parentNode.parentNode.parentNode.setAttribute("hidden", "");
-                                        }
-                                    }
-                                }
-        });
-        await sleep(500);
-        commentUnfoldObserver.observe(card, commentUnfoldObConfig);
-    }
-
-    function commentButtonAddEventListener(cards){
-        for (let card of cards)
-            for (let button of card.querySelectorAll("button.Button.ContentItem-action"))
-                if (button.innerText.includes("评论"))
-                    button.addEventListener("click", (() => commentCheck(card)));
-    }
-
     async function checkCards(newCards=null){
         var cards;
         if (!newCards) cards = Array.from(document.getElementsByClassName("Card TopstoryItem TopstoryItem-isRecommend"));
@@ -223,7 +182,6 @@
         console.log("知乎推荐流优化 检查新获得的推荐卡片列表……");
         checkIfBannedWordInCard(cards);
         checkIfAuthorDefaultAvatarInCard(cards);
-        // commentButtonAddEventListener(cards);
     }
 
     // 当检查到推荐流列表发生更新时的回调函数
@@ -391,7 +349,7 @@
     //     console.log(`userChecked(${userChecked.size}): ` + JSON.stringify(Array.from(userChecked)));
     // },
     // 5000);
-    console.log("知乎推荐流优化v0.3.4 已加载完成");
+    console.log("知乎推荐流优化v0.3.5 已加载完成");
 
     // 首次加载时间较长 等待后再做检查
     await sleep(2000);
