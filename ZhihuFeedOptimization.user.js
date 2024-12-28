@@ -63,13 +63,14 @@
         let fetchPromises = [];
         // console.log("知乎推荐流优化 查询用户 " + userId);
         fetchPromises.push(
-            fetch(`https://api.zhihu.com/people/${userId}/profile?profile_new_version=1`)
+            fetch(`https://api.zhihu.com/people/${userId}/profile?profile_new_version=1`, {credentials: "include"})
                 .then(response => response.json())
                 .then(data => {
                     // data.error: 大量请求知乎api后被反爬虫识别 需要到所给出的页面中进行真人验证
                     if (data.error){
-                        alert("知乎推荐流优化 需要进行真人验证，请在打开的窗口中完成！");
-                        window.open(data.error.redirect);
+                        console.log(JSON.stringify(data));
+                        if (confirm("知乎推荐流优化 需要进行真人验证，请在打开的窗口中完成！"))
+                            window.open(data.error.redirect);
                     }
                     else {
                         // console.log("用户 " + userId + " 头像URL " + data.avatar_url_template);
