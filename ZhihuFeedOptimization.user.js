@@ -7,7 +7,7 @@
 // @grant       GM_getValue
 // @grant       GM_registerMenuCommand
 // @grant       GM_unregisterMenuCommand
-// @version     0.3.6
+// @version     0.3.7
 // @run-at      document-idle
 // @author      lisolaris
 // @icon        https://www.google.com/s2/favicons?sz=64&domain=zhihu.com
@@ -151,9 +151,6 @@
                 }
             }
         }
-
-        console.log("知乎推荐流优化 完成检查");
-        removeCard();
     }
 
     function removeCard() {
@@ -212,6 +209,9 @@
         checkIfBannedWordInCard(cards);
         if (enableDefaultAvatarFilter)
             checkIfAuthorDefaultAvatarInCard(cards);
+
+        console.log("知乎推荐流优化 完成检查");
+        removeCard();
     }
 
     // 当检查到推荐流列表发生更新时的回调函数
