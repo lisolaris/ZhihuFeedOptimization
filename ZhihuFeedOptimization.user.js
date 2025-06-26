@@ -7,7 +7,7 @@
 // @grant       GM_getValue
 // @grant       GM_registerMenuCommand
 // @grant       GM_unregisterMenuCommand
-// @version     0.3.7
+// @version     0.3.8
 // @run-at      document-idle
 // @author      lisolaris
 // @icon        https://www.google.com/s2/favicons?sz=64&domain=zhihu.com
@@ -51,6 +51,7 @@
     var enableUsernameAuxJudgment = parseInt(GM_getValue("usernameAuxJudgment", "1"));
     var enableAutoSendUninterestWithBannedWordCard = parseInt(GM_getValue("autoSendUninterestWithBannedWordCard", "1"));
     var enableUseExtendAvatarDatabase = parseInt(GM_getValue("useExtendAvatarDatabase", "0"));
+    var enableRemoveHeadPageThinkingTable = parseInt(GM_getValue("RemoveHeadPageThinkingTable", "0"))
 
     async function checkIfBannedWordInCard(newCards){
         for (let card of newCards){
@@ -178,7 +179,7 @@
                                     let popWind = mutation.addedNodes[0].querySelector("div.Popover-content");
                                     if (popWind)
                                         for (let button of popWind.querySelectorAll("button.AnswerItem-selfMenuItem"))
-                                            if (button.innerText === "不感兴趣")
+                                            if (button.innerText === "不喜欢该内容")
                                                 button.click();
                                 }
                             }
@@ -260,6 +261,7 @@
         var menuId_toggleUsernameAuxJudgment = null;
         var menuId_toggleAutoSendUninterest = null;
         var menuId_toggleUseExtendAvatarDatabase = null;
+        var menuId_toggleRemoveHeadPageThinkingTable = null;
 
         function menuAddBannedWords(){
             let words = prompt("请输入屏蔽词，输入多个时以','分隔: ");
@@ -390,6 +392,20 @@
             menuUpdateVariableMenuInOrder();
         }
 
+        function menutoggleRemoveHeadPageThinkingTable(){
+            enableRemoveHeadPageThinkingTable = !enableRemoveHeadPageThinkingTable;
+            GM_setValue("RemoveHeadPageThinkingTable", (enableRemoveHeadPageThinkingTable ? 1 : 0));
+            if (enableRemoveHeadPageThinkingTable){
+                document.querySelector("div.WriteArea.Card").setAttribute("hidden", "");
+                console.log("%c知乎推荐流优化 已隐藏首页顶部想法编辑栏", "color:#FF00FF");
+            }
+            else{
+                document.querySelector("div.WriteArea.Card").removeAttribute("hidden");
+                console.log("%c知乎推荐流优化 已取消隐藏首页顶部想法编辑栏", "color:#21E589");
+            }
+            menuUpdateVariableMenuInOrder();
+        }
+
         // 用于确保刷新数据后 在脚本管理器菜单里的各个项目顺序是正确的
         function menuUpdateVariableMenuInOrder(){
             GM_unregisterMenuCommand(menuId_setAnswerCountThreshold);
@@ -398,14 +414,17 @@
             GM_unregisterMenuCommand(menuId_toggleUsernameAuxJudgment);
             GM_unregisterMenuCommand(menuId_toggleAutoSendUninterest);
             GM_unregisterMenuCommand(menuId_toggleUseExtendAvatarDatabase);
+            GM_unregisterMenuCommand(menuId_toggleRemoveHeadPageThinkingTable);
 
-            menuId_setAnswerCountThreshold = GM_registerMenuCommand(`设置答案数量阈值（${answerCountThreshold}）`, menuSetAnswerCountThreshold);
             menuId_setNewCardsCountThreshold = GM_registerMenuCommand(`设置新卡片数量阈值（${newCardsThreshold}）`, menuSetNewCardsCountThreshold);
-            menuId_toggleDefaultAvatarFilter = GM_registerMenuCommand(`是否启用默认头像屏蔽（${enableDefaultAvatarFilter ? "是" : "否"}）`, menuToggleDefaultAvatarFilter, {autoClose: false});
-            if (enableDefaultAvatarFilter)  // 在启用了屏蔽默认头像后才会显示用户名辅助判定菜单
-                menuId_toggleUsernameAuxJudgment = GM_registerMenuCommand(`是否启用用户名辅助判定（${enableUsernameAuxJudgment ? "是" : "否"}）`, menuToggleUsernameAuxJudgment, {autoClose: false});
             menuId_toggleAutoSendUninterest = GM_registerMenuCommand(`是否自动点击不感兴趣（${enableAutoSendUninterestWithBannedWordCard ? "是" : "否"}）`, menuToggleAutoSendUninterest, {autoClose: false});
-            menuId_toggleUseExtendAvatarDatabase = GM_registerMenuCommand(`是否使用扩展默认头像库（${enableUseExtendAvatarDatabase ? "是" : "否"}）`, menuToggleUseExtendAvatarDatabase, {autoClose: false});
+            menuId_toggleDefaultAvatarFilter = GM_registerMenuCommand(`是否启用默认头像屏蔽（${enableDefaultAvatarFilter ? "是" : "否"}）`, menuToggleDefaultAvatarFilter, {autoClose: false});
+            if (enableDefaultAvatarFilter){ // 在启用了屏蔽默认头像后才会显示相关菜单
+                menuId_setAnswerCountThreshold = GM_registerMenuCommand(` - 设置答案数量阈值（${answerCountThreshold}）`, menuSetAnswerCountThreshold);
+                menuId_toggleUsernameAuxJudgment = GM_registerMenuCommand(` - 是否启用用户名辅助判定（${enableUsernameAuxJudgment ? "是" : "否"}）`, menuToggleUsernameAuxJudgment, {autoClose: false});
+                menuId_toggleUseExtendAvatarDatabase = GM_registerMenuCommand(`是否使用扩展默认头像库（${enableUseExtendAvatarDatabase ? "是" : "否"}）`, menuToggleUseExtendAvatarDatabase, {autoClose: false});
+            }
+            menuId_toggleRemoveHeadPageThinkingTable = GM_registerMenuCommand(`是否隐藏首页顶部想法编辑栏（${enableRemoveHeadPageThinkingTable ? "是" : "否"}）`, menutoggleRemoveHeadPageThinkingTable, {autoClose: false});
         }
 
         GM_registerMenuCommand("添加屏蔽词", menuAddBannedWords);
@@ -420,6 +439,7 @@
         console.log("知乎推荐流优化 是否使用用户名作为辅助判断: " + (enableUsernameAuxJudgment ? "是" : "否"));
         console.log("知乎推荐流优化 是否自动对匹配屏蔽词的卡片点击不感兴趣: " + (enableAutoSendUninterestWithBannedWordCard ? "是" : "否"));
         console.log("知乎推荐流优化 是否使用扩展默认头像库: " + (enableUseExtendAvatarDatabase ? "是" : "否"));
+        console.log("知乎推荐流优化 是否隐藏首页顶部想法编辑栏: " + (enableRemoveHeadPageThinkingTable ? "是" : "否"));
     })();
 
     const recomBody = document.querySelector("div.Topstory-recommend");
@@ -438,6 +458,10 @@
     console.log(`知乎推荐流优化v${GM.info.script.version} 已加载完成`);
 
     // 首次加载时间较长 等待后再做检查
-    await sleep(2000);
+    await sleep(1000);
+    if (enableRemoveHeadPageThinkingTable){
+        document.querySelector("div.WriteArea.Card").setAttribute("hidden", "");
+        console.log("%c知乎推荐流优化 已隐藏首页顶部想法编辑栏", "color:#FF00FF");
+    }
     checkCards();
 })();
