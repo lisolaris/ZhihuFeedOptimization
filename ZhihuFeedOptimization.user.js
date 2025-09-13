@@ -7,7 +7,7 @@
 // @grant       GM_getValue
 // @grant       GM_registerMenuCommand
 // @grant       GM_unregisterMenuCommand
-// @version     0.3.8
+// @version     0.3.9
 // @run-at      document-idle
 // @author      lisolaris
 // @icon        https://www.google.com/s2/favicons?sz=64&domain=zhihu.com
@@ -178,7 +178,7 @@
                                 if (mutation.addedNodes.length != 0){
                                     let popWind = mutation.addedNodes[0].querySelector("div.Popover-content");
                                     if (popWind)
-                                        for (let button of popWind.querySelectorAll("button.AnswerItem-selfMenuItem"))
+                                        for (let button of popWind.querySelectorAll("button"))
                                             if (button.innerText === "不喜欢该内容")
                                                 button.click();
                                 }
